@@ -29,52 +29,21 @@ def sender(tab_id, args, messages, headless, storage_path):
             page.goto(args.thread_url, timeout=60000)
             page.wait_for_selector(dm_selector, timeout=30000)
             print(f"Tab {tab_id} ready, starting infinite message loop.")
-            current_page = page
-            cycle_start = time.time()
-            new_page = None
-            preloaded_this_cycle = False
-            msg_index = 0
             while True:
-                elapsed = time.time() - cycle_start
-                if elapsed >= 60:
-                    if new_page is not None:
-                        current_page.close()
-                        current_page = new_page
-                        print(f"Tab {tab_id} Switched to new page after {elapsed:.1f}s")
-                    else:
-                        print(f"Tab {tab_id} No new page, reloading current after {elapsed:.1f}s")
-                        current_page.goto(args.thread_url, timeout=60000)
-                        current_page.wait_for_selector(dm_selector, timeout=30000)
-                    cycle_start = time.time()
-                    new_page = None
-                    preloaded_this_cycle = False
-                    continue
-                if elapsed >= 50 and not preloaded_this_cycle:
-                    preloaded_this_cycle = True
+                for msg in messages:
                     try:
-                        new_page = context.new_page()
-                        new_page.goto(args.thread_url, timeout=60000)
-                        new_page.wait_for_selector(dm_selector, timeout=30000)
-                        print(f"Tab {tab_id} Preloaded new page at {elapsed:.1f}s")
-                    except Exception as e:
-                        new_page = None
-                        print(f"Tab {tab_id} Failed to preload new page at {elapsed:.1f}s: {e}")
-                msg = messages[msg_index]
-                try:
-                    if not current_page.locator(dm_selector).is_visible():
-                        print(f"Tab {tab_id} Selector not visible, skipping '{msg}'")
+                        if not page.locator(dm_selector).is_visible():
+                            print(f"Tab {tab_id} Selector not visible, skipping '{msg}'")
+                            time.sleep(0.3)
+                            continue
+                        page.click(dm_selector)
+                        page.fill(dm_selector, msg)
+                        page.press(dm_selector, 'Enter')
+                        print(f"Tab {tab_id} Sending: {msg}")
                         time.sleep(0.3)
-                        msg_index = (msg_index + 1) % len(messages)
-                        continue
-                    current_page.click(dm_selector)
-                    current_page.fill(dm_selector, msg)
-                    current_page.press(dm_selector, 'Enter')
-                    print(f"Tab {tab_id} Sending: {msg}")
-                    time.sleep(0.3)
-                except Exception as e:
-                    print(f"Tab {tab_id} Error sending message '{msg}': {e}")
-                    time.sleep(0.3)
-                msg_index = (msg_index + 1) % len(messages)
+                    except Exception as e:
+                        print(f"Tab {tab_id} Error sending message '{msg}': {e}")
+                        time.sleep(0.3)
         except Exception as e:
             print(f"Tab {tab_id} Unexpected error: {e}")
         finally:
@@ -126,7 +95,7 @@ def main():
         print("No messages provided.")
         return
 
-    tabs = min(max(args.tabs, 1), 5)
+    tabs = min(max(args.tabs, 1), 3)
     threads = []
     for i in range(tabs):
         t = threading.Thread(target=sender, args=(i+1, args, messages, headless, storage_path))
